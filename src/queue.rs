@@ -1,12 +1,12 @@
 //! Queue that plays sounds one after the other.
 
+use parking_lot::Mutex;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 use std::sync::mpsc::Sender;
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::time::Duration;
 
 use source::Empty;
@@ -44,6 +44,27 @@ where
     (input, output)
 }
 
+pub fn queue_listen<S>(
+    keep_alive_if_empty: bool,
+    signal_after_end: Sender<()>,
+) -> (Arc<SourcesQueueInput<S>>, SourcesQueueOutput<S>)
+where
+    S: Sample + Send + 'static,
+{
+    let input = Arc::new(SourcesQueueInput {
+        next_sounds: Mutex::new(Vec::new()),
+        keep_alive_if_empty: AtomicBool::new(keep_alive_if_empty),
+    });
+
+    let output = SourcesQueueOutput {
+        current: Box::new(Empty::<S>::new()) as Box<_>,
+        signal_after_end: Some(signal_after_end),
+        input: input.clone(),
+    };
+
+    (input, output)
+}
+
 // TODO: consider reimplementing this with `from_factory`
 
 /// The input of the queue.
@@ -66,7 +87,6 @@ where
     {
         self.next_sounds
             .lock()
-            .unwrap()
             .push((Box::new(source) as Box<_>, None));
     }
 
@@ -81,7 +101,6 @@ where
         let (tx, rx) = mpsc::channel();
         self.next_sounds
             .lock()
-            .unwrap()
             .push((Box::new(source) as Box<_>, Some(tx)));
         rx
     }
@@ -201,7 +220,7 @@ where
         }
 
         let (next, signal_after_end) = {
-            let mut next = self.input.next_sounds.lock().unwrap();
+            let mut next = self.input.next_sounds.lock();
 
             if next.len() == 0 {
                 if self.input.keep_alive_if_empty.load(Ordering::Acquire) {
@@ -270,7 +289,7 @@ mod tests {
         assert_eq!(rx.next(), Some(10));
         assert_eq!(rx.next(), Some(-10));
 
-        for _ in 0 .. 100000 {
+        for _ in 0..100000 {
             assert_eq!(rx.next(), Some(0));
         }
     }
@@ -280,7 +299,7 @@ mod tests {
     fn no_delay_when_added() {
         let (tx, mut rx) = queue::queue(true);
 
-        for _ in 0 .. 500 {
+        for _ in 0..500 {
             assert_eq!(rx.next(), Some(0));
         }
 

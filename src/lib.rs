@@ -96,6 +96,8 @@ extern crate lewton;
 #[cfg(feature = "mp3")]
 extern crate minimp3;
 
+extern crate parking_lot;
+
 pub use cpal::{
     default_input_device, default_output_device, devices, input_devices, output_devices, Device,
 };

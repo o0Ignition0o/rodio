@@ -1,29 +1,50 @@
 [package]
-name = "rodio"
-version = "0.8.1"
 authors = ["Pierre Krieger <pierre.krieger1708@gmail.com>"]
-license = "MIT/Apache-2.0"
 description = "Audio playback library"
-keywords = ["audio", "playback", "gamedev"]
-repository = "https://github.com/tomaka/rodio"
 documentation = "http://docs.rs/rodio"
+keywords = [
+    "audio",
+    "playback",
+    "gamedev",
+]
+license = "MIT/Apache-2.0"
+name = "rodio"
+repository = "https://github.com/tomaka/rodio"
+version = "0.8.1"
 
 [dependencies]
-claxon = { version = "0.4.1", optional = true }
-hound = { version = "3.3.1", optional = true }
-lazy_static = "1.0.0"
-lewton = { version = "0.9", optional = true }
 cgmath = "0.17"
-minimp3 = { version = "0.3.2", optional = true }
+lazy_static = "1.0.0"
+parking_lot = "0.7.1"
+
+[dependencies.claxon]
+optional = true
+version = "0.4.1"
 
 [dependencies.cpal]
-git = "https://github.com/OtaK/cpal"
 branch = "optimization/parking-lot"
+git = "https://github.com/OtaK/cpal"
+
+[dependencies.hound]
+optional = true
+version = "3.3.1"
+
+[dependencies.lewton]
+optional = true
+version = "0.9"
+
+[dependencies.minimp3]
+optional = true
+version = "0.3.2"
 
 [features]
-default = ["flac", "vorbis", "wav", "mp3"]
-
+default = [
+    "flac",
+    "vorbis",
+    "wav",
+    "mp3",
+]
 flac = ["claxon"]
+mp3 = ["minimp3"]
 vorbis = ["lewton"]
 wav = ["hound"]
-mp3 = ["minimp3"]
