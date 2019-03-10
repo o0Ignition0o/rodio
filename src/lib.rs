@@ -104,6 +104,7 @@ pub use cpal::{
 
 pub use conversions::Sample;
 pub use decoder::Decoder;
+pub use engine::destroy_stream;
 pub use engine::play_raw;
 pub use sink::Sink;
 pub use source::Source;

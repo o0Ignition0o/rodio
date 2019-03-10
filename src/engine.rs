@@ -17,7 +17,7 @@ use source::Source;
 /// Plays a source with a device until it ends.
 ///
 /// The playing uses a background thread.
-pub fn play_raw<S>(device: &Device, source: S)
+pub fn play_raw<S>(device: &Device, source: S) -> (Arc<Engine>, Option<StreamId>)
 where
     S: Source<Item = f32> + Send + 'static,
 {
@@ -48,13 +48,23 @@ where
         };
     }
 
-    start(&ENGINE, device, source);
+    let stream_id = start(&ENGINE, device, source);
+    (ENGINE.clone(), stream_id)
+}
+
+/// Release the resources and clear the event loop once playing is complete.
+pub fn destroy_stream(engine: &Arc<Engine>, device_name: &str, id: StreamId) {
+    {
+        let mut end_points = engine.end_points.lock();
+        end_points.remove(device_name);
+    }
+    engine.events_loop.destroy_stream(id)
 }
 
 // The internal engine of this library.
 //
 // Each `Engine` owns a thread that runs in the background and plays the audio.
-struct Engine {
+pub struct Engine {
     // The events loop which the streams are created with.
     events_loop: EventLoop,
 
@@ -104,7 +114,7 @@ fn audio_callback(engine: &Arc<Engine>, stream_id: StreamId, buffer: StreamData)
 }
 
 // Builds a new sink that targets a given device.
-fn start<S>(engine: &Arc<Engine>, device: &Device, source: S)
+fn start<S>(engine: &Arc<Engine>, device: &Device, source: S) -> Option<StreamId>
 where
     S: Source<Item = f32> + Send + 'static,
 {
@@ -133,11 +143,12 @@ where
         }
     };
 
-    if let Some(stream) = stream_to_start {
+    if let Some(stream) = stream_to_start.clone() {
         engine.events_loop.play_stream(stream);
     }
 
     mixer.add(source);
+    stream_to_start
 }
 
 // Adds a new stream to the engine.

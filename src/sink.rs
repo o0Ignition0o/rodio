@@ -5,6 +5,7 @@ use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::time::Duration;
 
+use destroy_stream;
 use play_raw;
 use queue;
 use source::Done;
@@ -34,11 +35,25 @@ struct Controls {
 
 impl Sink {
     #[inline(always)]
-    pub fn new_oneshot(device: &Device) -> Self {
-        let (queue_tx, queue_rx) = queue::queue(false);
-        play_raw(device, queue_rx);
+    pub fn new_oneshot<S>(device: &Device, source: S) -> Self
+    where
+        S: Source + Send + 'static,
+        S::Item: Sample,
+        S::Item: Send,
+    {
+        let (done_tx, done_rx) = std::sync::mpsc::channel();
+        let (queue_tx, queue_rx) = queue::queue_notify_empty(false, done_tx);
+        let (engine, stream_id) = play_raw(device, queue_rx);
+        let device_name = device.name();
 
-        Sink {
+        std::thread::spawn(move || {
+            if let Some(id) = stream_id {
+                let _ = done_rx.recv();
+                destroy_stream(&engine, &device_name, id);
+            }
+        });
+
+        let sink = Sink {
             queue_tx: queue_tx,
             sleep_until_end: Arc::new(Mutex::new(None)),
             controls: Arc::new(Controls {
@@ -48,7 +63,9 @@ impl Sink {
             }),
             sound_count: Arc::new(AtomicUsize::new(0)),
             detached: false,
-        }
+        };
+        sink.append(source);
+        sink
     }
 
     /// Builds a new `Sink`.

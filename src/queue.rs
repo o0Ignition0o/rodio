@@ -37,7 +37,9 @@ where
 
     let output = SourcesQueueOutput {
         current: Box::new(Empty::<S>::new()) as Box<_>,
+        pristine: true,
         signal_after_end: None,
+        signal_on_queue_empty: None,
         input: input.clone(),
     };
 
@@ -58,7 +60,32 @@ where
 
     let output = SourcesQueueOutput {
         current: Box::new(Empty::<S>::new()) as Box<_>,
+        pristine: true,
+        signal_on_queue_empty: None,
         signal_after_end: Some(signal_after_end),
+        input: input.clone(),
+    };
+
+    (input, output)
+}
+
+pub fn queue_notify_empty<S>(
+    keep_alive_if_empty: bool,
+    signal_on_queue_empty: Sender<()>,
+) -> (Arc<SourcesQueueInput<S>>, SourcesQueueOutput<S>)
+where
+    S: Sample + Send + 'static,
+{
+    let input = Arc::new(SourcesQueueInput {
+        next_sounds: Mutex::new(Vec::new()),
+        keep_alive_if_empty: AtomicBool::new(keep_alive_if_empty),
+    });
+
+    let output = SourcesQueueOutput {
+        current: Box::new(Empty::<S>::new()) as Box<_>,
+        pristine: true,
+        signal_on_queue_empty: Some(signal_on_queue_empty),
+        signal_after_end: None,
         input: input.clone(),
     };
 
@@ -118,6 +145,12 @@ where
 pub struct SourcesQueueOutput<S> {
     // The current iterator that produces samples.
     current: Box<Source<Item = S> + Send>,
+
+    // True if no source has ever been appeneded
+    pristine: bool,
+
+    // Signal the sender the queue is empty.
+    signal_on_queue_empty: Option<Sender<()>>,
 
     // Signal this sender before picking from `next`.
     signal_after_end: Option<Sender<()>>,
@@ -189,12 +222,18 @@ where
         loop {
             // Basic situation that will happen most of the time.
             if let Some(sample) = self.current.next() {
+                self.pristine = false;
                 return Some(sample);
             }
 
             // Since `self.current` has finished, we need to pick the next sound.
             // In order to avoid inlining this expensive operation, the code is in another function.
             if self.go_next().is_err() {
+                if !self.pristine {
+                    if let Some(signal_on_queue_empty) = self.signal_on_queue_empty.take() {
+                        let _ = signal_on_queue_empty.send(());
+                    }
+                }
                 return None;
             }
         }
