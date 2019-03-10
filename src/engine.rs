@@ -1,8 +1,6 @@
 use parking_lot::Mutex;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::Weak;
 use std::thread::Builder;
 
 use cpal::Device;
@@ -25,8 +23,7 @@ where
         static ref ENGINE: Arc<Engine> = {
             let engine = Arc::new(Engine {
                 events_loop: EventLoop::new(),
-                dynamic_mixers: Mutex::new(HashMap::with_capacity(1)),
-                end_points: Mutex::new(HashMap::with_capacity(1)),
+                dynamic_mixers: Mutex::new(HashMap::with_capacity(1))
             });
 
             // We ignore errors when creating the background thread.
@@ -54,11 +51,7 @@ where
 }
 
 /// Release the resources and clear the event loop once playing is complete.
-pub fn destroy_stream(engine: &Arc<Engine>, device_name: &str, id: StreamId) {
-    {
-        let mut end_points = engine.end_points.lock();
-        end_points.remove(device_name);
-    }
+pub fn destroy_stream(engine: &Arc<Engine>, id: StreamId) {
     engine.events_loop.destroy_stream(id)
 }
 
@@ -70,13 +63,10 @@ pub struct Engine {
     events_loop: EventLoop,
 
     dynamic_mixers: Mutex<HashMap<StreamId, dynamic_mixer::DynamicMixer<f32>>>,
-
-    // TODO: don't use the device name, as it's slow
-    end_points: Mutex<HashMap<String, Weak<dynamic_mixer::DynamicMixerController<f32>>>>,
 }
 
 fn audio_callback(engine: &Arc<Engine>, stream_id: StreamId, buffer: StreamData) {
-    // Alsa is not too thread safe after all huh.
+    // The buffer isn't really ready sometimes :(
     std::thread::sleep(std::time::Duration::from_millis(1));
     let mut dynamic_mixers = engine.dynamic_mixers.lock();
 
@@ -121,37 +111,10 @@ fn start<S>(engine: &Arc<Engine>, device: &Device, source: S) -> Option<StreamId
 where
     S: Source<Item = f32> + Send + 'static,
 {
-    let mut stream_to_start = None;
-
-    let mixer = {
-        let mut end_points = engine.end_points.lock();
-
-        match end_points.entry(device.name()) {
-            Entry::Vacant(e) => {
-                let (mixer, stream) = new_output_stream(engine, device);
-                e.insert(Arc::downgrade(&mixer));
-                stream_to_start = Some(stream);
-                mixer
-            }
-            Entry::Occupied(mut e) => {
-                if let Some(m) = e.get().upgrade() {
-                    m.clone()
-                } else {
-                    let (mixer, stream) = new_output_stream(engine, device);
-                    e.insert(Arc::downgrade(&mixer));
-                    stream_to_start = Some(stream);
-                    mixer
-                }
-            }
-        }
-    };
-
-    if let Some(stream) = stream_to_start.clone() {
-        engine.events_loop.play_stream(stream);
-    }
-
+    let (mixer, stream) = new_output_stream(engine, device);
+    engine.events_loop.play_stream(stream.clone());
     mixer.add(source);
-    stream_to_start
+    Some(stream)
 }
 
 // Adds a new stream to the engine.

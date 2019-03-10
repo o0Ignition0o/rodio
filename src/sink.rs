@@ -44,12 +44,10 @@ impl Sink {
         let (done_tx, done_rx) = std::sync::mpsc::channel();
         let (queue_tx, queue_rx) = queue::queue_notify_empty(false, done_tx);
         let (engine, stream_id) = play_raw(device, queue_rx);
-        let device_name = device.name();
-
         std::thread::spawn(move || {
             if let Some(id) = stream_id {
                 let _ = done_rx.recv();
-                destroy_stream(&engine, &device_name, id);
+                destroy_stream(&engine, id);
             }
         });
 
