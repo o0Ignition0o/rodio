@@ -22,8 +22,8 @@ optional = true
 version = "0.4.1"
 
 [dependencies.cpal]
-branch = "optimization/parking-lot"
-git = "https://github.com/OtaK/cpal"
+branch = "optimization/poll_relevant_events_only"
+git = "https://github.com/o0Ignition0o/cpal"
 
 [dependencies.hound]
 optional = true
