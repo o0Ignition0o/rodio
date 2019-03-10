@@ -66,8 +66,6 @@ pub struct Engine {
 }
 
 fn audio_callback(engine: &Arc<Engine>, stream_id: StreamId, buffer: StreamData) {
-    // The buffer isn't really ready sometimes :(
-    std::thread::sleep(std::time::Duration::from_millis(1));
     let mut dynamic_mixers = engine.dynamic_mixers.lock();
 
     let mixer_rx = match dynamic_mixers.get_mut(&stream_id) {
@@ -97,7 +95,7 @@ fn audio_callback(engine: &Arc<Engine>, stream_id: StreamId, buffer: StreamData)
             buffer: UnknownTypeOutputBuffer::F32(mut buffer),
         } => {
             for d in buffer.iter_mut() {
-                *d = mixer_rx.next().map(|s| s.to_f32()).unwrap_or(0f32);
+                *d = mixer_rx.next().unwrap_or(0f32);
             }
         }
         StreamData::Input { buffer: _ } => {
