@@ -44,13 +44,6 @@ impl Sink {
         let (done_tx, done_rx) = std::sync::mpsc::channel();
         let (queue_tx, queue_rx) = queue::queue_notify_empty(false, done_tx);
         let (engine, stream_id) = play_raw(device, queue_rx);
-        std::thread::spawn(move || {
-            if let Some(id) = stream_id {
-                let _ = done_rx.recv();
-                destroy_stream(&engine, id);
-            }
-        });
-
         let sink = Sink {
             queue_tx: queue_tx,
             sleep_until_end: Arc::new(Mutex::new(None)),
@@ -63,6 +56,12 @@ impl Sink {
             detached: false,
         };
         sink.append(source);
+        std::thread::spawn(move || {
+            if let Some(id) = stream_id {
+                let _ = done_rx.recv();
+                destroy_stream(&engine, id);
+            }
+        });
         sink
     }
 

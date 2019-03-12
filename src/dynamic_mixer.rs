@@ -107,11 +107,10 @@ where
 
     #[inline]
     fn next(&mut self) -> Option<S> {
-        if self.input.has_pending.swap(false, Ordering::SeqCst) {
-            // Sometimes the pending sources aren't ready just yet...
-            std::thread::sleep(std::time::Duration::from_millis(1));
+        if self.input.has_pending.load(Ordering::SeqCst) {
             let mut pending = self.input.pending_sources.lock();
             self.current_sources.extend(pending.drain(..));
+            self.input.has_pending.store(false, Ordering::SeqCst);
         }
 
         let mut to_drop = Vec::new();
