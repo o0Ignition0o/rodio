@@ -35,12 +35,13 @@ struct Controls {
 
 impl Sink {
     #[inline(always)]
-    pub fn new_oneshot<S>(device: &Device, source: S) -> Self
+    pub fn new_oneshot<S>(device: &Device, source: S) -> (Self, Receiver<()>)
     where
         S: Source + Send + 'static,
         S::Item: Sample,
         S::Item: Send,
     {
+        let (complete_tx, complete_rx) = std::sync::mpsc::channel();
         let (done_tx, done_rx) = std::sync::mpsc::channel();
         let (queue_tx, queue_rx) = queue::queue_notify_empty(false, done_tx);
         let (engine, stream_id) = play_raw(device, queue_rx);
@@ -60,9 +61,10 @@ impl Sink {
             if let Some(id) = stream_id {
                 let _ = done_rx.recv();
                 destroy_stream(&engine, id);
+                let _ = complete_tx.send(());
             }
         });
-        sink
+        (sink, complete_rx)
     }
 
     /// Builds a new `Sink`.
